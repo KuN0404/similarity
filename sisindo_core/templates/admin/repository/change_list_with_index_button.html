@@ -1,0 +1,27 @@
+{# prettier-ignore-start #}
+<style>
+  .object-tools {
+    display: flex !important;
+    align-items: center;
+    list-style: none;
+  }
+  .object-tools li {
+    margin-left: 5px;
+  }
+</style>
+{% extends "admin/change_list.html" %} {% load i18n %} {% block object-tools %}
+<ul class="object-tools">
+  {# Tombol Custom: Indexing Manual #}
+  <li>
+    <a
+      href="start-indexing/"
+      class="btn btn-success text-white"
+      style="margin-right: 5px"
+    >
+      <i class="fas fa-rocket mr-1"></i> Mulai Indexing Manual
+    </a>
+  </li>
+
+  {# Tombol Bawaan Django (Add Repository File) #} {{ block.super }}
+</ul>
+{% endblock %} {# prettier-ignore-end #}

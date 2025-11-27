@@ -1,0 +1,16 @@
+{# prettier-ignore-start #} {% extends "admin/change_list.html" %} {% load i18n
+static %} {% block object-tools %}
+<ul class="object-tools">
+  <li>
+    <a
+      href="start-check/"
+      class="btn btn-success text-white"
+      style="margin-right: 5px"
+    >
+      <i class="fas fa-search mr-1"></i> Mulai Cek Plagiasi Baru
+    </a>
+  </li>
+
+  {{ block.super }}
+</ul>
+{% endblock %} {# prettier-ignore-end #}

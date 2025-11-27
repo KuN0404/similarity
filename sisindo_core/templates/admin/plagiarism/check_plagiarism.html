@@ -1,0 +1,751 @@
+{# prettier-ignore-start #} {% extends "admin/base_site.html" %} {% load i18n
+static admin_modify %} {% block extrastyle %}
+<style>
+  .progress-container {
+    display: none;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 350px;
+    z-index: 9999;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 15px;
+  }
+
+  .progress-container.active {
+    display: block;
+  }
+
+  .progress-item {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 5px;
+  }
+
+  .progress-item.completed {
+    background: #d4edda;
+    border-left: 4px solid #28a745;
+  }
+
+  .progress-item.failed {
+    background: #f8d7da;
+    border-left: 4px solid #dc3545;
+  }
+
+  .progress-item.processing {
+    background: #d1ecf1;
+    border-left: 4px solid #17a2b8;
+  }
+
+  .progress-bar-wrapper {
+    margin-top: 5px;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #17a2b8, #007bff);
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+  }
+
+  .upload-disabled {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .warning-banner {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 5px;
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+
+  .quota-info {
+    background: #e7f3ff;
+    border: 1px solid #2196f3;
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 15px;
+  }
+
+  textarea.form-control {
+    min-height: 200px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 14px;
+  }
+
+  .custom-file-label::after {
+    content: "Browse";
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .status-completed {
+    background: #28a745;
+    color: white;
+  }
+  .status-processing {
+    background: #17a2b8;
+    color: white;
+  }
+  .status-pending {
+    background: #ffc107;
+    color: #333;
+  }
+  .status-failed {
+    background: #dc3545;
+    color: white;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="container-fluid">
+  <!-- Progress Monitor (Fixed Position) -->
+  <div id="progressContainer" class="progress-container">
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      "
+    >
+      <h6 style="margin: 0"><i class="fas fa-tasks"></i> Status Pemrosesan</h6>
+      <button
+        onclick="toggleProgressMonitor()"
+        class="btn btn-sm btn-outline-secondary"
+      >
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div id="progressList"></div>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <div class="card card-primary card-outline">
+        <div class="card-header">
+          <h3 class="card-title font-weight-bold">
+            <i class="fas fa-robot mr-2"></i> Form Deteksi Plagiasi
+          </h3>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="plagiarismForm">
+          {% csrf_token %}
+          <div class="card-body">
+            <!-- Quota Info -->
+            <div class="quota-info">
+              <i class="fas fa-chart-pie"></i>
+              <strong>Kuota Upload Hari Ini:</strong>
+              <span id="quotaDisplay">{{ remaining_quota }}</span> dokumen
+              tersisa
+            </div>
+
+            {% if active_process %}
+            <div class="warning-banner">
+              <i class="fas fa-exclamation-triangle"></i>
+              <strong>Proses Sedang Berjalan:</strong>
+              <span id="activeProcessName">{{ active_process.filename }}</span>
+              <span
+                class="status-badge status-{{ active_process.status }}"
+                id="activeProcessStatus"
+              >
+                {{ active_process.get_status_display }}
+              </span>
+              <div class="progress-bar-wrapper mt-2">
+                <div
+                  class="progress-bar-fill"
+                  id="activeProcessBar"
+                  style="width: {{ active_process.progress }}%;"
+                >
+                  {{ active_process.progress }}%
+                </div>
+              </div>
+              <small class="d-block mt-2"
+                >Anda tidak dapat mengupload dokumen baru sampai proses ini
+                selesai.</small
+              >
+            </div>
+            {% endif %} {% if form.errors %}
+            <div
+              class="alert alert-danger alert-dismissible fade show"
+              role="alert"
+            >
+              <strong
+                ><i class="fas fa-exclamation-triangle"></i> Terjadi
+                Kesalahan!</strong
+              >
+              <ul class="mb-0 pl-3">
+                {% for field in form %} {% for error in field.errors %}
+                <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                {% endfor %} {% endfor %}
+              </ul>
+              <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+              </button>
+            </div>
+            {% endif %}
+
+            <!-- Form Content -->
+            <div
+              id="formContent"
+              class="{% if active_process %}upload-disabled{% endif %}"
+            >
+              <div class="form-group">
+                <label class="font-weight-bold">Metode Input:</label>
+                <div
+                  class="btn-group btn-group-toggle w-100"
+                  data-toggle="buttons"
+                >
+                  <label class="btn btn-outline-primary active" id="btn-file">
+                    <input
+                      type="radio"
+                      name="input_type"
+                      value="file"
+                      checked
+                      autocomplete="off"
+                    />
+                    <i class="fas fa-file-upload mr-1"></i> Upload File
+                  </label>
+                  <label class="btn btn-outline-primary" id="btn-text">
+                    <input
+                      type="radio"
+                      name="input_type"
+                      value="text"
+                      autocomplete="off"
+                    />
+                    <i class="fas fa-paste mr-1"></i> Paste Teks
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group" id="file-input-group">
+                <label for="id_document_file" class="font-weight-bold">
+                  Upload Dokumen: <span class="text-danger">*</span>
+                </label>
+                <div class="custom-file">
+                  <input
+                    type="file"
+                    name="document_file"
+                    class="custom-file-input"
+                    id="id_document_file"
+                    accept=".docx,.pdf"
+                    multiple
+                  />
+                  <label class="custom-file-label" for="id_document_file"
+                    >Pilih file (bisa multiple)...</label
+                  >
+                </div>
+                <small class="form-text text-muted">
+                  <i class="fas fa-info-circle"></i> Format:
+                  <strong>.DOCX, .PDF</strong> | Tekan
+                  <strong>Ctrl/Cmd</strong> untuk pilih multiple files
+                </small>
+                <div id="fileList" class="mt-2"></div>
+              </div>
+
+              <div
+                class="form-group"
+                id="text-input-group"
+                style="display: none"
+              >
+                <label for="id_pasted_text" class="font-weight-bold">
+                  Tempel Teks: <span class="text-danger">*</span>
+                </label>
+                <textarea
+                  name="pasted_text"
+                  class="form-control"
+                  id="id_pasted_text"
+                  rows="10"
+                  placeholder="Salin dan tempel teks paragraf yang ingin diperiksa di sini..."
+                ></textarea>
+              </div>
+
+              <hr />
+
+              <div class="form-group">
+                <label for="id_source_mode" class="font-weight-bold"
+                  >Sumber Pembanding:</label
+                >
+                <select
+                  name="source_mode"
+                  id="id_source_mode"
+                  class="form-control custom-select"
+                >
+                  <option value="local">🔍 Hanya Repository Lokal</option>
+                  <option value="internet">🌐 Hanya Internet (Google)</option>
+                  <option value="both" selected>
+                    🚀 Keduanya (Lokal & Internet)
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer bg-white">
+            <button
+              type="submit"
+              class="btn btn-success btn-lg btn-block shadow-sm"
+              id="submitBtn"
+              {%
+              if
+              active_process
+              %}disabled{%
+              endif
+              %}
+            >
+              <i class="fas fa-search mr-2"></i> Mulai Proses Deteksi
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="col-12 col-lg-4">
+      <div class="card card-info card-outline">
+        <div class="card-header">
+          <h5 class="card-title">
+            <i class="fas fa-lightbulb text-warning mr-2"></i> Petunjuk
+          </h5>
+        </div>
+        <div class="card-body">
+          <p><strong>Sistem Deteksi Plagiasi SISINDO</strong></p>
+          <ul class="pl-3 text-sm">
+            <li class="mb-2">
+              <strong>Multi-Upload:</strong> Upload banyak file sekaligus
+            </li>
+            <li class="mb-2">
+              <strong>Background Processing:</strong> Proses berjalan di
+              background
+            </li>
+            <li class="mb-2">
+              <strong>Real-time Progress:</strong> Monitor progress secara live
+            </li>
+            <li class="mb-2">
+              <strong>Kuota Harian:</strong> Setiap user punya batas upload per
+              hari
+            </li>
+            <li class="mb-2">
+              <strong>Output PDF:</strong> Hasil berupa PDF dengan highlight
+            </li>
+          </ul>
+          <div class="alert alert-light border mt-3">
+            <small>
+              <i class="fas fa-info-circle"></i>
+              Laporan PDF akan otomatis tersedia untuk diunduh setelah proses
+              selesai.
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent History -->
+      <div class="card card-secondary card-outline mt-3">
+        <div class="card-header">
+          <h5 class="card-title">
+            <i class="fas fa-history mr-2"></i> 5 Riwayat Terbaru
+          </h5>
+        </div>
+        <div class="card-body p-2" id="recentHistory">
+          <div class="text-center text-muted py-3">
+            <i class="fas fa-spinner fa-spin"></i> Loading...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+      // ============================================================================
+      // CONFIGURATION
+      // ============================================================================
+      const STATUS_CHECK_INTERVAL = 3000; // 3 seconds
+      let statusCheckTimer = null;
+      let hasActiveProcess = {{ active_process|yesno:"true,false" }};
+
+      // ============================================================================
+      // INITIALIZATION
+      // ============================================================================
+      document.addEventListener("DOMContentLoaded", function() {
+        initializeForm();
+        initializeFileUpload();
+        startStatusMonitoring();
+      });
+
+      // ============================================================================
+      // FORM HANDLING
+      // ============================================================================
+      function initializeForm() {
+        const form = document.getElementById("plagiarismForm");
+        const btnFile = document.getElementById("btn-file");
+        const btnText = document.getElementById("btn-text");
+        const fileGroup = document.getElementById("file-input-group");
+        const textGroup = document.getElementById("text-input-group");
+        const fileInput = document.getElementById("id_document_file");
+        const textInput = document.getElementById("id_pasted_text");
+
+        function toggleInput(type) {
+          if (type === "file") {
+            fileGroup.style.display = "block";
+            textGroup.style.display = "none";
+            btnFile.classList.add("active");
+            btnText.classList.remove("active");
+            if (fileInput) fileInput.required = true;
+            if (textInput) {
+              textInput.required = false;
+              textInput.value = "";
+            }
+          } else {
+            fileGroup.style.display = "none";
+            textGroup.style.display = "block";
+            btnFile.classList.remove("active");
+            btnText.classList.add("active");
+            if (textInput) textInput.required = true;
+            if (fileInput) {
+              fileInput.required = false;
+              fileInput.value = "";
+              updateFileList([]);
+            }
+          }
+        }
+
+        const radioButtons = document.querySelectorAll('input[name="input_type"]');
+        radioButtons.forEach(radio => {
+          radio.addEventListener("change", function() {
+            toggleInput(this.value);
+          });
+        });
+
+        btnFile.addEventListener("click", () => {
+          const radio = document.querySelector('input[name="input_type"][value="file"]');
+          if (radio) {
+            radio.checked = true;
+            toggleInput("file");
+          }
+        });
+
+        btnText.addEventListener("click", () => {
+          const radio = document.querySelector('input[name="input_type"][value="text"]');
+          if (radio) {
+            radio.checked = true;
+            toggleInput("text");
+          }
+        });
+
+        // Form submit validation
+        if (form) {
+        form.addEventListener("submit", function(e) {
+            if (hasActiveProcess) {
+                e.preventDefault();
+                alert("⚠ Masih ada proses yang sedang berjalan. Mohon tunggu hingga selesai.");
+                return false;
+            }
+
+            const inputType = document.querySelector('input[name="input_type"]:checked').value;
+
+            if (inputType === "file") {
+                if (!fileInput.files.length) {
+                    e.preventDefault();
+                    alert("❌ Harap pilih file dokumen terlebih dahulu!");
+                    return false;
+                }
+
+                // Validate each file
+                let hasInvalid = false;
+                Array.from(fileInput.files).forEach(file => {
+                    const fileExt = file.name.split('.').pop().toLowerCase();
+                    if (!['pdf', 'docx'].includes(fileExt)) {
+                        hasInvalid = true;
+                    }
+                });
+
+                if (hasInvalid) {
+                    e.preventDefault();
+                    alert("❌ Hanya file .pdf dan .docx yang diperbolehkan!");
+                    return false;
+                }
+            }
+
+            if (inputType === "text") {
+                const text = textInput.value.trim();
+                if (!text) {
+                    e.preventDefault();
+                    alert("❌ Harap tempelkan teks terlebih dahulu!");
+                    return false;
+                }
+                if (text.length < 100) {
+                    e.preventDefault();
+                    alert("❌ Teks terlalu pendek! Minimal 100 karakter.");
+                    return false;
+                }
+                if (text.length > 50000) {
+                    e.preventDefault();
+                    alert("❌ Teks terlalu panjang! Maksimal 50.000 karakter.");
+                    return false;
+                }
+            }
+        });
+        }
+
+        // Initialize state
+        const checkedRadio = document.querySelector('input[name="input_type"]:checked');
+        toggleInput(checkedRadio ? checkedRadio.value : "file");
+      }
+
+      // ============================================================================
+      // FILE UPLOAD HANDLING
+      // ============================================================================
+  function initializeFileUpload() {
+      const fileInput = document.getElementById("id_document_file");
+      const maxSize = 10 * 1024 * 1024; // 10MB
+
+      if (fileInput) {
+          fileInput.addEventListener("change", function(e) {
+              const files = Array.from(e.target.files);
+
+              // Validasi files
+              const validFiles = [];
+              const errors = [];
+
+              files.forEach(file => {
+                  const fileExt = file.name.split('.').pop().toLowerCase();
+
+                  // Check extension
+                  if (!['pdf', 'docx'].includes(fileExt)) {
+                      errors.push(`❌ ${file.name}: Format tidak didukung (hanya .pdf dan .docx)`);
+                      return;
+                  }
+
+                  // Check size
+                  if (file.size > maxSize) {
+                      errors.push(`❌ ${file.name}: Terlalu besar (max 10MB)`);
+                      return;
+                  }
+
+                  validFiles.push(file);
+              });
+
+              // Display errors
+              if (errors.length > 0) {
+                  alert(errors.join('\n'));
+              }
+
+              // Update display with valid files only
+              updateFileList(validFiles);
+
+              // Update input (remove invalid files)
+              if (validFiles.length !== files.length) {
+                  const dt = new DataTransfer();
+                  validFiles.forEach(f => dt.items.add(f));
+                  fileInput.files = dt.files;
+              }
+          });
+      }
+  }
+      function updateFileList(files) {
+        const fileListDiv = document.getElementById("fileList");
+        const fileLabel = document.querySelector(".custom-file-label");
+
+        if (files.length === 0) {
+          fileListDiv.innerHTML = "";
+          fileLabel.textContent = "Pilih file (bisa multiple)...";
+          return;
+        }
+
+        fileLabel.textContent = `${files.length} file dipilih`;
+
+        let html = '<div class="alert alert-info p-2"><small><strong>File yang dipilih:</strong></small><ul class="mb-0 pl-3">';
+        files.forEach(file => {
+          html += `<li><small>${file.name} (${formatFileSize(file.size)})</small></li>`;
+        });
+        html += '</ul></div>';
+
+        fileListDiv.innerHTML = html;
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+      }
+
+      // ============================================================================
+      // STATUS MONITORING
+      // ============================================================================
+      function startStatusMonitoring() {
+        checkStatus(); // Initial check
+        statusCheckTimer = setInterval(checkStatus, STATUS_CHECK_INTERVAL);
+      }
+
+      function checkStatus() {
+        fetch('{% url "admin:plagiarism_check_status" %}')
+          .then(response => response.json())
+          .then(data => {
+            hasActiveProcess = data.has_active;
+            updateUI(data);
+            updateProgressMonitor(data.processes);
+            updateRecentHistory(data.processes);
+          })
+          .catch(error => {
+            console.error('Error checking status:', error);
+          });
+      }
+
+      function updateUI(data) {
+        const formContent = document.getElementById("formContent");
+        const submitBtn = document.getElementById("submitBtn");
+        const warningBanner = document.querySelector(".warning-banner");
+        const quotaDisplay = document.getElementById("quotaDisplay");
+
+        // Update quota display
+        if (quotaDisplay && data.remaining_quota !== undefined) {
+          quotaDisplay.textContent = data.remaining_quota;
+        }
+
+        if (data.has_active) {
+          if (formContent) formContent.classList.add("upload-disabled");
+          if (submitBtn) submitBtn.disabled = true;
+
+          // Update active process info
+          const activeProcess = data.processes.find(p => p.status === 'processing' || p.status === 'pending');
+          if (activeProcess) {
+            const processName = document.getElementById("activeProcessName");
+            const processStatus = document.getElementById("activeProcessStatus");
+            const processBar = document.getElementById("activeProcessBar");
+
+            if (processName) processName.textContent = activeProcess.filename;
+            if (processStatus) {
+              processStatus.textContent = activeProcess.status.toUpperCase();
+              processStatus.className = `status-badge status-${activeProcess.status}`;
+            }
+            if (processBar) {
+              processBar.style.width = activeProcess.progress + '%';
+              processBar.textContent = activeProcess.progress + '%';
+            }
+          }
+        } else {
+          if (formContent) formContent.classList.remove("upload-disabled");
+          if (submitBtn) submitBtn.disabled = false;
+          if (warningBanner) warningBanner.style.display = 'none';
+        }
+      }
+
+      function updateProgressMonitor(processes) {
+        const container = document.getElementById("progressContainer");
+        const list = document.getElementById("progressList");
+
+        const activeProcesses = processes.filter(p =>
+          p.status === 'processing' || p.status === 'pending'
+        );
+
+        if (activeProcesses.length === 0) {
+          container.classList.remove("active");
+          return;
+        }
+
+        container.classList.add("active");
+
+        let html = '';
+        activeProcesses.forEach(proc => {
+          html += `
+            <div class="progress-item ${proc.status}">
+              <div style="display: flex; justify-content: between; align-items: center;">
+                <small><strong>${proc.filename}</strong></small>
+                <span class="status-badge status-${proc.status}">${proc.status}</span>
+              </div>
+              <div class="progress-bar-wrapper">
+                <div class="progress-bar-fill" style="width: ${proc.progress}%;">
+                  ${proc.progress}%
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
+        list.innerHTML = html;
+      }
+
+      function updateRecentHistory(processes) {
+        const historyDiv = document.getElementById("recentHistory");
+
+        if (processes.length === 0) {
+            historyDiv.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-inbox"></i> Belum ada riwayat</div>';
+            return;
+        }
+
+        let html = '<div class="list-group list-group-flush">';
+
+        processes.slice(0, 5).forEach(proc => {
+            const downloadUrl = "{% url 'admin:plagiarism_download_report' '00000000-0000-0000-0000-000000000000' %}".replace('00000000-0000-0000-0000-000000000000', proc.id);
+
+            html += `
+            <div class="list-group-item p-2">
+              <div class="d-flex justify-content-between align-items-start">
+                <small><strong>${proc.filename}</strong></small>
+                <span class="status-badge status-${proc.status}">${proc.status}</span>
+              </div>
+              ${proc.status === 'completed' ? `
+                <small class="text-success">
+                  <i class="fas fa-check-circle"></i> ${proc.similarity_score}% similarity
+                </small>
+
+                ${proc.file_deleted ? `
+                  <div class="alert alert-warning p-1 mt-1">
+                    <small><i class="fas fa-trash"></i> File dihapus: ${proc.file_deleted_reason || 'Auto-cleanup'}</small>
+                  </div>
+                ` : proc.can_download ? `
+                  <a href="${downloadUrl}" class="btn btn-sm btn-success btn-block mt-1">
+                    <i class="fas fa-download"></i> Download PDF
+                  </a>
+                ` : ''}
+              ` : ''}
+              ${proc.status === 'failed' ? `
+                <small class="text-danger"><i class="fas fa-exclamation-circle"></i> ${proc.error_message || 'Error'}</small>
+              ` : ''}
+              ${proc.status === 'processing' || proc.status === 'pending' ? `
+                <div class="progress mt-1" style="height: 15px;">
+                  <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: ${proc.progress}%">${proc.progress}%</div>
+                </div>
+              ` : ''}
+            </div>
+            `;
+        });
+        html += '</div>';
+
+        historyDiv.innerHTML = html;
+    }
+
+      function toggleProgressMonitor() {
+        const container = document.getElementById("progressContainer");
+        container.classList.toggle("active");
+      }
+
+      // Cleanup on page unload
+      window.addEventListener('beforeunload', function() {
+        if (statusCheckTimer) {
+          clearInterval(statusCheckTimer);
+        }
+      });
+</script>
+{% endblock %} {# prettier-ignore-end #}

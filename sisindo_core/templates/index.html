@@ -1,0 +1,580 @@
+<!-- ================================================================= -->
+<!-- templates/landing/index.html -->
+<!-- ================================================================= -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --primary-color: #1f4788;
+        --secondary-color: #2c5f96;
+        --accent-color: #4a90e2;
+        --text-dark: #2d3748;
+        --bg-light: #f8f9fa;
+      }
+
+      body {
+        font-family: "Inter", "Segoe UI", sans-serif;
+        color: var(--text-dark);
+        overflow-x: hidden;
+      }
+
+      .navbar {
+        transition: all 0.3s ease;
+        padding: 1rem 0;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+      }
+
+      .navbar-brand {
+        font-weight: 800;
+        font-size: 1.5rem;
+        color: var(--primary-color) !important;
+      }
+
+      .hero-section {
+        background: linear-gradient(135deg, var(--bg-light) 0%, #e3ebf5 100%);
+        padding: 140px 0 80px;
+        position: relative;
+        overflow: hidden;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+      }
+
+      .hero-title {
+        font-weight: 800;
+        font-size: 3rem;
+        line-height: 1.2;
+        background: linear-gradient(
+          90deg,
+          var(--primary-color),
+          var(--accent-color)
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1.5rem;
+        animation: fadeInUp 0.8s ease;
+      }
+
+      .shape-bg {
+        position: absolute;
+        top: -10%;
+        right: -10%;
+        width: 600px;
+        height: 600px;
+        background: linear-gradient(
+          45deg,
+          rgba(31, 71, 136, 0.05),
+          rgba(74, 144, 226, 0.1)
+        );
+        border-radius: 50%;
+        z-index: 0;
+        animation: float 6s ease-in-out infinite;
+      }
+
+      .feature-card {
+        background: #fff;
+        padding: 2.5rem;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        height: 100%;
+        border: 1px solid rgba(0, 0, 0, 0.03);
+        animation: fadeInUp 0.8s ease;
+      }
+
+      .feature-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      }
+
+      .icon-box {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      .btn-login {
+        padding: 12px 30px;
+        font-weight: 600;
+        border-radius: 50px;
+        transition: all 0.3s;
+      }
+
+      .btn-primary-custom {
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+      }
+
+      .btn-primary-custom:hover {
+        background-color: var(--secondary-color);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(31, 71, 136, 0.2);
+      }
+
+      .demo-card {
+        animation: float 3s ease-in-out infinite;
+      }
+
+      footer {
+        background-color: #fff;
+        padding: 40px 0;
+        border-top: 1px solid #eee;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(2deg);
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      .progress-bar-animated {
+        animation: progress-animation 2s ease-in-out infinite;
+      }
+
+      @keyframes progress-animation {
+        0% {
+          width: 0%;
+        }
+        100% {
+          width: 85%;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .hero-title {
+          font-size: 2.5rem;
+        }
+        .hero-section {
+          padding-top: 100px;
+          text-align: center;
+        }
+        .hero-img {
+          margin-top: 40px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg fixed-top shadow-sm">
+      <div class="container">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+          <i class="fas fa-shield-alt"></i> SISINDO
+        </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto align-items-center">
+            <li class="nav-item">
+              <a class="nav-link text-dark fw-medium mx-2" href="#">Home</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link text-dark fw-medium mx-2" href="#features"
+                >Fitur</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link text-dark fw-medium mx-2" href="#how-it-works"
+                >Cara Kerja</a
+              >
+            </li>
+            <li class="nav-item ms-lg-3">
+              <a href="/admin/" class="btn btn-primary-custom btn-login">
+                <i class="fas fa-sign-in-alt me-2"></i> Login Admin
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <section class="hero-section d-flex align-items-center">
+      <div class="shape-bg"></div>
+      <div class="container position-relative z-1">
+        <div class="row align-items-center">
+          <div class="col-lg-6">
+            <span
+              class="badge bg-primary bg-opacity-10 text-primary mb-3 px-3 py-2 rounded-pill"
+            >
+              <i class="fas fa-check-circle me-1"></i> Sistem Deteksi
+              Plagiarisme
+            </span>
+            <h1 class="hero-title">Pastikan Keaslian Dokumen Karya Ilmiah</h1>
+            <p class="lead text-muted mb-4">
+              SISINDO membantu institusi mendeteksi plagiarisme dengan
+              membandingkan database lokal repository kampus dan internet secara
+              akurat menggunakan teknologi NLP.
+            </p>
+            <div
+              class="d-flex gap-3 justify-content-center justify-content-lg-start"
+            >
+              <a
+                href="/admin/"
+                class="btn btn-primary-custom btn-login btn-lg shadow"
+              >
+                Mulai Sekarang <i class="fas fa-arrow-right ms-2"></i>
+              </a>
+            </div>
+            <div class="mt-4">
+              <small class="text-muted">
+                <i class="fas fa-check text-success me-1"></i> UUID-based
+                Repository
+                <i class="fas fa-check text-success ms-3 me-1"></i> Manual
+                Indexing
+                <i class="fas fa-check text-success ms-3 me-1"></i> Detailed
+                Reports
+              </small>
+            </div>
+          </div>
+          <div class="col-lg-6 hero-img text-center">
+            <div class="position-relative">
+              <div
+                class="card shadow-lg border-0 p-3 demo-card"
+                style="
+                  transform: rotate(-2deg);
+                  z-index: 2;
+                  max-width: 400px;
+                  margin: 0 auto;
+                "
+              >
+                <div class="card-body">
+                  <div class="d-flex align-items-center mb-3">
+                    <div class="bg-danger rounded-circle p-2 me-3 text-white">
+                      <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div>
+                      <h6 class="mb-0 fw-bold">Skripsi_Final.pdf</h6>
+                      <small class="text-muted">Scanning...</small>
+                    </div>
+                  </div>
+                  <div class="progress mb-3" style="height: 10px">
+                    <div
+                      class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                      style="width: 85%"
+                    ></div>
+                  </div>
+                  <div class="alert alert-light border mb-0 text-start">
+                    <small
+                      ><i class="fas fa-check text-success me-1"></i>
+                      <strong>Local DB:</strong> Connected</small
+                    ><br />
+                    <small
+                      ><i class="fas fa-check text-success me-1"></i>
+                      <strong>Internet:</strong> Connected</small
+                    >
+                  </div>
+                </div>
+              </div>
+              <div
+                class="card bg-primary text-white border-0 position-absolute"
+                style="
+                  top: 20px;
+                  left: 50%;
+                  transform: translateX(-40%) rotate(3deg);
+                  width: 400px;
+                  height: 200px;
+                  z-index: 1;
+                  opacity: 0.1;
+                "
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="py-5 bg-white">
+      <div class="container py-5">
+        <div class="text-center mb-5">
+          <h6 class="text-primary fw-bold text-uppercase tracking-wide">
+            Fitur Utama
+          </h6>
+          <h2 class="fw-bold">Mengapa SISINDO?</h2>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-md-4">
+            <div class="feature-card">
+              <div class="icon-box bg-primary bg-opacity-10 text-primary">
+                <i class="fas fa-database"></i>
+              </div>
+              <h4 class="fw-bold mb-3">Repository UUID-based</h4>
+              <p class="text-muted">
+                Setiap dokumen menggunakan UUID v4 sebagai identitas unik.
+                Metadata tersimpan di MariaDB dengan struktur terorganisir per
+                tipe file.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="feature-card">
+              <div class="icon-box bg-success bg-opacity-10 text-success">
+                <i class="fas fa-cogs"></i>
+              </div>
+              <h4 class="fw-bold mb-3">Manual Indexing</h4>
+              <p class="text-muted">
+                Indexing dilakukan manual dengan kontrol penuh. Admin dapat
+                memulai dan membatalkan proses kapan saja dengan tombol di admin
+                panel.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="feature-card">
+              <div class="icon-box bg-danger bg-opacity-10 text-danger">
+                <i class="fas fa-search"></i>
+              </div>
+              <h4 class="fw-bold mb-3">Dual Source Checking</h4>
+              <p class="text-muted">
+                Cek similarity terhadap dokumen lokal (repository kampus) dan
+                internet (Google Search) dengan algoritma tokenisasi NLTK yang
+                akurat.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="feature-card">
+              <div class="icon-box bg-warning bg-opacity-10 text-warning">
+                <i class="fas fa-highlighter"></i>
+              </div>
+              <h4 class="fw-bold mb-3">Color-coded Highlighting</h4>
+              <p class="text-muted">
+                Setiap sumber plagiarisme di-highlight dengan warna unik pada
+                dokumen hasil. Mudah diidentifikasi dan dipahami.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="feature-card">
+              <div class="icon-box bg-info bg-opacity-10 text-info">
+                <i class="fas fa-file-alt"></i>
+              </div>
+              <h4 class="fw-bold mb-3">Detailed Reports</h4>
+              <p class="text-muted">
+                Laporan lengkap berisi summary, source breakdown, tabel kalimat
+                terindikasi, dan kategori plagiarisme dalam format DOCX.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="feature-card">
+              <div class="icon-box bg-secondary bg-opacity-10 text-secondary">
+                <i class="fas fa-users-cog"></i>
+              </div>
+              <h4 class="fw-bold mb-3">Role Management</h4>
+              <p class="text-muted">
+                Sistem role untuk Super Admin, Staff, dan Mahasiswa dengan
+                permission berbeda dan limit upload per bulan untuk mahasiswa.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how-it-works" class="py-5 bg-light">
+      <div class="container py-5">
+        <div class="text-center mb-5">
+          <h6 class="text-primary fw-bold text-uppercase">Alur Kerja</h6>
+          <h2 class="fw-bold">Bagaimana SISINDO Bekerja?</h2>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-md-3">
+            <div class="text-center">
+              <div
+                class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                style="width: 80px; height: 80px"
+              >
+                <h3 class="text-primary mb-0">1</h3>
+              </div>
+              <h5 class="fw-bold">Upload Dokumen</h5>
+              <p class="text-muted">
+                Admin atau mahasiswa upload file PDF/DOCX ke repository dengan
+                metadata lengkap.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <div
+                class="bg-success bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                style="width: 80px; height: 80px"
+              >
+                <h3 class="text-success mb-0">2</h3>
+              </div>
+              <h5 class="fw-bold">Manual Indexing</h5>
+              <p class="text-muted">
+                Admin trigger indexing manual. Sistem ekstrak teks dan simpan
+                sebagai .content.txt dengan UUID.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <div
+                class="bg-warning bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                style="width: 80px; height: 80px"
+              >
+                <h3 class="text-warning mb-0">3</h3>
+              </div>
+              <h5 class="fw-bold">Cek Plagiarisme</h5>
+              <p class="text-muted">
+                Upload/paste dokumen, pilih sumber (Lokal/Internet/Both), sistem
+                analisis per kalimat dengan tokenizer NLTK.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-center">
+              <div
+                class="bg-danger bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                style="width: 80px; height: 80px"
+              >
+                <h3 class="text-danger mb-0">4</h3>
+              </div>
+              <h5 class="fw-bold">Dapatkan Laporan</h5>
+              <p class="text-muted">
+                Download dokumen ter-highlight + laporan detail dengan breakdown
+                per sumber dan kategori plagiarisme.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-md-6 mb-3 mb-md-0">
+            <a
+              class="d-flex align-items-center gap-2 text-decoration-none mb-2"
+              href="#"
+            >
+              <i class="fas fa-shield-alt fa-2x text-primary"></i>
+              <span class="fw-bold fs-4 text-dark">SISINDO</span>
+            </a>
+            <p class="text-muted small mb-0">
+              Sistem Informasi Similarity Index Document - Deteksi Plagiarisme
+              Berbasis AI untuk Institusi Pendidikan.
+            </p>
+          </div>
+          <div class="col-md-6 text-md-end">
+            <p class="text-muted mb-0">
+              &copy; 2025 SISINDO. All rights reserved. Powered by Django &
+              MariaDB.
+            </p>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Smooth scroll untuk anchor links
+      document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+        anchor.addEventListener("click", function (e) {
+          e.preventDefault();
+          const target = document.querySelector(this.getAttribute("href"));
+          if (target) {
+            target.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        });
+      });
+
+      // Navbar shadow on scroll
+      window.addEventListener("scroll", function () {
+        const navbar = document.querySelector(".navbar");
+        if (window.scrollY > 50) {
+          navbar.style.boxShadow = "0 2px 10px rgba(0,0,0,0.1)";
+        } else {
+          navbar.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)";
+        }
+      });
+
+      // Animate elements on scroll
+      const observerOptions = {
+        threshold: 0.1,
+        rootMargin: "0px 0px -50px 0px",
+      };
+
+      const observer = new IntersectionObserver(function (entries) {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.style.opacity = "1";
+            entry.target.style.transform = "translateY(0)";
+          }
+        });
+      }, observerOptions);
+
+      document.querySelectorAll(".feature-card").forEach((card) => {
+        card.style.opacity = "0";
+        card.style.transform = "translateY(20px)";
+        card.style.transition = "opacity 0.6s ease, transform 0.6s ease";
+        observer.observe(card);
+      });
+    </script>
+  </body>
+</html>
