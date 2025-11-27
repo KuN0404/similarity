@@ -20,7 +20,6 @@ def download_nltk_data():
         'punkt',           # Sentence tokenizer
         'punkt_tab',       # Additional punkt data
         'stopwords',       # Stopwords (optional)
-        'averaged_perceptron_tagger',  # POS tagger (optional)
     ]
     
     print("\nDownloading NLTK packages...\n")

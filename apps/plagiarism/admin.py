@@ -86,12 +86,13 @@ class PlagiarismHistoryAdmin(admin.ModelAdmin):
             return format_html('<p class="text-muted"><i>Tidak ada sumber terdeteksi</i></p>')
         
         # Get current user's role
-        from django.contrib.auth import get_user
-        from threading import current_thread
+        user = getattr(self, 'request', None).user if getattr(self, 'request', None) else None
         
-        # Get request from thread local (ini adalah workaround untuk mendapatkan request di admin)
-        # Alternatif: bisa juga menggunakan middleware custom
-        user_role = obj.user.role if hasattr(obj, 'user') else 'mahasiswa'
+        # Default False jika request/user tidak ditemukan (misal dipanggil dari shell/cron)
+        can_open_repo = False
+        if user:
+            can_open_repo = user.has_perm('accounts.can_view_repository')
+        # -----------------------
         
         html = '<div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #f9f9f9;">'
         
@@ -110,7 +111,7 @@ class PlagiarismHistoryAdmin(admin.ModelAdmin):
                 html += '</div>'
                 
                 # Role-based file access
-                if user_role in ['superadmin', 'staff']:
+                if request.user.has_perm('accounts.can_view_repository'):
                     if src.get('file_path') and os.path.exists(src['file_path']):
                         # Link to repository file detail page
                         repo_url = f'/admin/repository/repositoryfile/{src["id"]}/change/'
@@ -156,15 +157,40 @@ class PlagiarismHistoryAdmin(admin.ModelAdmin):
         html += '<strong>Keterangan:</strong><br>'
         html += '• <strong>Repository Lokal:</strong> Sumber dari database internal<br>'
         html += '• <strong>Sumber Internet:</strong> Link website yang terdeteksi similar<br>'
-        if user_role == 'mahasiswa':
-            html += '• 🔒 Mahasiswa hanya dapat melihat metadata, tidak dapat mengakses file sumber'
+        if can_open_repo:
+            html += '• 🔓 Anda memiliki akses membuka file sumber repository'
         else:
-            html += '• 🔓 Staff/Admin dapat membuka file sumber dari repository'
+            html += '• 🔒 Anda hanya dapat melihat metadata sumber'
         html += '</div>'
         
         return format_html(html)
     
     matched_sources_display.short_description = "Sumber Terdeteksi"
+
+    def has_module_permission(self, request):
+        """
+        Mengontrol apakah 'App' (History) muncul di sidebar.
+        Kita izinkan jika user punya izin cek plagiasi ATAU lihat history.
+        """
+        if request.user.is_superuser:
+            return True
+            
+        return (
+            request.user.has_perm('accounts.can_check_plagiarism') or 
+            request.user.has_perm('accounts.can_view_own_history')
+        )
+
+    # 2. Tambahkan Method ini agar Tabel Bisa Dibuka (Read Only)
+    def has_view_permission(self, request, obj=None):
+        """
+        Mengizinkan user membuka daftar history (View Only).
+        """
+        if request.user.is_superuser:
+            return True
+            
+        return request.user.has_perm('accounts.can_view_own_history')
+    def add_view(self, request, form_url='', extra_context=None):
+        return redirect('admin:plagiarism_check_tool')
 
     def has_add_permission(self, request):
         return False
@@ -173,7 +199,18 @@ class PlagiarismHistoryAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.role == 'superadmin'
+        return request.user.has_perm('accounts.can_manage_users')
+    
+# 6. PENTING: Batasi data agar Mahasiswa hanya melihat punya sendiri
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        
+        # Jika Super Admin atau Staff yang punya izin lihat semua, tampilkan semua
+        if request.user.is_superuser or request.user.has_perm('accounts.can_view_all_history'):
+            return qs
+            
+        # Jika Mahasiswa (atau user biasa), filter hanya milik sendiri
+        return qs.filter(user=request.user)
 
     def get_urls(self):
         urls = super().get_urls()
@@ -195,6 +232,11 @@ class PlagiarismHistoryAdmin(admin.ModelAdmin):
         else:
             return "⏳ Belum Ada"
     file_status_display.short_description = "Status File"
+
+    def get_form(self, request, obj=None, **kwargs):
+        # Simpan request ke dalam instance admin agar bisa diakses di method lain
+        self.request = request
+        return super().get_form(request, obj, **kwargs)
 
     def plagiarism_check_view(self, request):
         context = dict(self.admin_site.each_context(request))

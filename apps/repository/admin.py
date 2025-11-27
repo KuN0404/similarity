@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.utils import timezone
 from django.conf import settings
+from apps.plagiarism.decorators import permission_required_custom, superadmin_required
 import os
 import fitz  # PyMuPDF
 import docx
@@ -15,9 +16,6 @@ class RepositoryFileAdmin(admin.ModelAdmin):
     list_filter = ('status', 'filetype')
     search_fields = ('filename', 'basename')
     
-    # --- ADD THIS CONFIGURATION ---
-    
-    # Fields that will be Read-Only (cannot be edited manually)
     readonly_fields = (
         'id', 
         'filename', 
@@ -51,14 +49,26 @@ class RepositoryFileAdmin(admin.ModelAdmin):
     actions = ['start_indexing_action']
     change_list_template = "admin/repository/change_list_with_index_button.html"
 
+    def has_add_permission(self, request):
+        return request.user.has_perm('accounts.can_add_repository')
+    
+    def has_change_permission(self, request, obj=None):
+        return request.user.has_perm('accounts.can_edit_repository')
+    
+    def has_delete_permission(self, request, obj=None):
+        return request.user.has_perm('accounts.can_delete_repository')
+    
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('start-indexing/', self.admin_site.admin_view(self.start_indexing_view), name='start_indexing'),
+            path('start-indexing/', 
+                 permission_required_custom('can_index_repository')(
+                     self.admin_site.admin_view(self.start_indexing_view)
+                 ), 
+                 name='start_indexing'),
         ]
         return custom_urls + urls
-
-    # ... (Keep the existing start_indexing_view logic as is) ...
+    
     def start_indexing_view(self, request):
         # ... (Previous indexing code logic) ...
         pending_files = RepositoryFile.objects.filter(status='pending')

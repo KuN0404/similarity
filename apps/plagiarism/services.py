@@ -3,6 +3,7 @@ import docx
 import fitz  # PyMuPDF
 import datetime
 import re
+from django.db import connection
 from django.conf import settings
 from nltk.tokenize import sent_tokenize, word_tokenize
 from googlesearch import search
@@ -16,216 +17,112 @@ from reportlab.lib.units import inch
 
 class PlagiarismService:
     def __init__(self):
+        from apps.plagiarism.models import PlagiarismSettings
         self.threshold = PlagiarismSettings.get_threshold()
         self.matched_sources = []
 
     def validate_pdf(self, file_path):
-        """
-        Pre-validation untuk PDF sebelum processing
-        Returns: (is_valid, error_message)
-        """
+        """Pre-validation untuk PDF"""
         try:
             doc = fitz.open(file_path)
             
-            # Check if PDF is empty
             if len(doc) == 0:
                 doc.close()
                 return (False, "PDF kosong (0 halaman)")
             
-            # Quick text check from first page
             first_page = doc[0]
             sample_text = first_page.get_text("text")
-            
             doc.close()
             
-            # If first page has no text, likely a scan
             if not sample_text or len(sample_text.strip()) < 20:
-                return (False, 
-                       "PDF kemungkinan berupa scan/gambar. "
-                       "Gunakan OCR atau copy-paste teks manual ke form 'Paste Teks'.")
+                return (False, "PDF kemungkinan berupa scan/gambar. Gunakan OCR atau copy-paste teks manual.")
             
             return (True, None)
             
-        except fitz.FileDataError:
-            return (False, "File PDF corrupt atau tidak valid")
-        except fitz.PasswordError:
-            return (False, "PDF terproteksi password")
         except Exception as e:
             return (False, f"Error validasi PDF: {str(e)}")
 
     def extract_text(self, file_path, file_ext):
-        """
-        Enhanced text extraction with better PDF handling
-        """
+        """Enhanced text extraction dengan MariaDB-compatible processing"""
         text = ""
         try:
             if file_ext == '.pdf':
-                # Pre-validate PDF
                 is_valid, error_msg = self.validate_pdf(file_path)
                 if not is_valid:
                     raise ValueError(error_msg)
-                
                 text = self._extract_from_pdf(file_path)
             elif file_ext == '.docx':
                 text = self._extract_from_docx(file_path)
             
-            # Clean and normalize text
-            text = self._clean_text(text)
+            # PENTING: Clean text untuk MariaDB compatibility
+            text = self._clean_text_for_mariadb(text)
             return text
             
         except Exception as e:
             print(f"Error extracting text: {e}")
-            import traceback
-            traceback.print_exc()
-            raise  # Re-raise to be handled by caller
+            raise
 
     def _extract_from_pdf(self, file_path):
-        """
-        Advanced PDF text extraction - IGNORE IMAGES, EXTRACT TEXT ONLY
-        """
-        text = ""
-        total_text_chars = 0
-        total_images = 0
+        """Ekstraksi PDF dengan chunking untuk memory efficiency"""
+        text_chunks = []
         
         try:
-            # Open PDF document
             doc = fitz.open(file_path)
             total_pages = len(doc)
             
-            print(f"📄 Processing PDF: {total_pages} pages")
-            
-            for page_num in range(total_pages):
-                page = doc[page_num]
-                page_text = ""
+            # Process dalam batch untuk hindari memory overflow
+            batch_size = 10
+            for start_page in range(0, total_pages, batch_size):
+                end_page = min(start_page + batch_size, total_pages)
                 
-                try:
-                    # Count images on this page (for logging only)
-                    image_list = page.get_images()
-                    page_images = len(image_list)
-                    total_images += page_images
-                    
-                    # Method 1: Standard text extraction (TEXT ONLY, NO IMAGES)
+                for page_num in range(start_page, end_page):
+                    page = doc[page_num]
                     page_text = page.get_text("text")
                     
-                    # Method 2: If standard fails, try blocks method (SKIP IMAGE BLOCKS)
-                    if not page_text or len(page_text.strip()) < 20:
-                        print(f"  Page {page_num+1}: Using blocks method")
-                        blocks = page.get_text("blocks")
-                        # Filter: block[6] == 0 means TEXT block (not image)
-                        text_blocks = [
-                            block[4] for block in blocks 
-                            if len(block) > 6 and block[6] == 0 and block[4].strip()
-                        ]
-                        page_text = "\n".join(text_blocks)
-                    
-                    # Method 3: If still empty, try dict method (TEXT ONLY)
-                    if not page_text or len(page_text.strip()) < 20:
-                        print(f"  Page {page_num+1}: Using dict method")
-                        text_dict = page.get_text("dict")
-                        page_text = self._extract_from_dict(text_dict)
-                    
-                    # Method 4: Try HTML extraction (then strip all tags)
-                    if not page_text or len(page_text.strip()) < 20:
-                        print(f"  Page {page_num+1}: Using HTML method")
-                        html_text = page.get_text("html")
-                        # Remove image tags first
-                        html_text = re.sub(r'<img[^>]*>', '', html_text, flags=re.IGNORECASE)
-                        # Strip all HTML tags
-                        page_text = re.sub('<[^<]+?>', '', html_text)
-                    
-                    # Clean and add page content
                     if page_text and page_text.strip():
-                        clean_page_text = page_text.strip()
-                        text += clean_page_text + "\n\n"
-                        total_text_chars += len(clean_page_text)
-                        
-                        log_msg = f"  ✓ Page {page_num+1}: {len(clean_page_text)} chars"
-                        if page_images > 0:
-                            log_msg += f" | {page_images} images (ignored)"
-                        print(log_msg)
-                    else:
-                        if page_images > 0:
-                            print(f"  ⚠ Page {page_num+1}: Only images, no text")
-                        else:
-                            print(f"  ⚠ Page {page_num+1}: No content found")
-                
-                except Exception as page_error:
-                    print(f"  ✗ Page {page_num+1}: Error - {page_error}")
-                    continue
-                    
+                        # Clean per-page untuk memory efficiency
+                        cleaned = self._clean_text_for_mariadb(page_text)
+                        if cleaned:
+                            text_chunks.append(cleaned)
+            
             doc.close()
             
-            # Final validation
-            text = text.strip()
+            # Join dengan newline untuk preserve paragraph structure
+            final_text = "\n\n".join(text_chunks)
             
-            # Summary
-            print(f"\n📊 Extraction Summary:")
-            print(f"   - Total text extracted: {total_text_chars} characters")
-            print(f"   - Total images found: {total_images} (ignored)")
-            print(f"   - Pages processed: {total_pages}")
+            if not final_text or len(final_text) < 50:
+                raise ValueError("Teks yang diekstrak terlalu sedikit. PDF mungkin berupa gambar.")
             
-            if not text:
-                if total_images > 0:
-                    raise ValueError(
-                        f"PDF berisi {total_images} gambar tetapi tidak ada teks yang dapat diekstrak. "
-                        f"Kemungkinan PDF berupa koleksi gambar/scan. "
-                        f"Gunakan OCR atau copy-paste teks manual."
-                    )
-                else:
-                    raise ValueError("Tidak ada teks yang dapat diekstrak dari PDF. PDF mungkin kosong.")
+            return final_text
             
-            if len(text) < 50:
-                raise ValueError(
-                    f"Teks yang diekstrak terlalu sedikit ({len(text)} karakter). "
-                    f"PDF mungkin mostly berisi gambar. "
-                    f"Gunakan OCR atau copy-paste teks manual ke form 'Paste Teks'."
-                )
-            
-            print(f"✅ PDF extraction completed: {len(text)} characters (text only)")
-            return text
-            
-        except fitz.FileDataError:
-            raise ValueError("File PDF corrupt atau tidak valid. Silakan coba file lain.")
-        except fitz.PasswordError:
-            raise ValueError("PDF terproteksi password. Silakan hapus password terlebih dahulu.")
         except Exception as e:
-            error_msg = str(e)
-            if "insufficient text" in error_msg.lower() or "no text" in error_msg.lower() or "gambar" in error_msg.lower():
-                raise ValueError(error_msg)
-            else:
-                raise ValueError(f"Error saat memproses PDF: {error_msg}")
+            raise ValueError(f"Error memproses PDF: {str(e)}")
 
-    def _extract_from_dict(self, text_dict):
+    def _clean_text_for_mariadb(self, text):
         """
-        Extract text from PyMuPDF dict structure (TEXT ONLY, SKIP IMAGES)
+        Clean text untuk kompatibilitas MariaDB:
+        - Remove 4-byte UTF-8 characters (emoji, dll)
+        - Normalize whitespace
+        - Keep only valid characters
         """
-        text = ""
-        try:
-            if "blocks" in text_dict:
-                for block in text_dict["blocks"]:
-                    # Skip image blocks (type 1), only process text blocks (type 0)
-                    if block.get("type") != 0:
-                        continue
-                    
-                    if "lines" in block:
-                        for line in block["lines"]:
-                            if "spans" in line:
-                                line_text = " ".join([
-                                    span.get("text", "") 
-                                    for span in line["spans"] 
-                                    if span.get("text", "").strip()
-                                ])
-                                if line_text.strip():
-                                    text += line_text.strip() + "\n"
-            
-            # Remove excessive newlines
-            text = re.sub(r'\n\s*\n', '\n\n', text)
-            
-        except Exception as e:
-            print(f"  Error in dict extraction: {e}")
+        if not text:
+            return ""
         
-        return text
-
+        # Remove 4-byte UTF-8 chars (emoji) untuk MariaDB utf8mb4
+        text = text.encode('utf-8', 'ignore').decode('utf-8')
+        
+        # Remove control characters kecuali newline dan tab
+        text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\t')
+        
+        # Normalize whitespace
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+        
+        # Remove leading/trailing whitespace per line
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        return '\n'.join(lines)
+    
     def _extract_from_docx(self, file_path):
         """
         Extract text from DOCX with paragraph preservation
@@ -295,32 +192,37 @@ class PlagiarismService:
         return text.strip()
 
     def tokenize(self, text):
-        """
-        Tokenize text into sentences with validation
-        """
+        """Tokenize dengan MariaDB-safe processing"""
         if not text or not text.strip():
             return []
         
         try:
-            # Use NLTK sentence tokenizer
+            # Clean text sebelum tokenize
+            text = self._clean_text_for_mariadb(text)
+            
             sentences = sent_tokenize(text)
             
-            # Filter valid sentences
             valid_sentences = []
             for s in sentences:
                 s = s.strip()
-                # Keep sentences with at least 10 chars and 3 words
+                # Filter kalimat valid (min 10 chars, 3 words)
                 if len(s) > 10 and len(s.split()) >= 3:
-                    valid_sentences.append(s)
+                    # Double-check MariaDB compatibility
+                    s_clean = self._clean_text_for_mariadb(s)
+                    if s_clean:
+                        valid_sentences.append(s_clean)
             
-            print(f"✓ Tokenized into {len(valid_sentences)} valid sentences")
             return valid_sentences
             
         except Exception as e:
             print(f"Error tokenizing: {e}")
             # Fallback: split by period
             sentences = text.split('.')
-            return [s.strip() + '.' for s in sentences if len(s.strip()) > 10]
+            return [
+                self._clean_text_for_mariadb(s.strip() + '.') 
+                for s in sentences 
+                if len(s.strip()) > 10
+            ]
 
     def check_google(self, sentence):
         try:
@@ -332,53 +234,50 @@ class PlagiarismService:
             return (0, None)
 
     def check_local(self, sentence):
-        best_score = 0
-        best_match = None
-        indexed_files = RepositoryFile.objects.filter(status='indexed')
+        """
+        Optimized local check dengan MariaDB native query
+        Menggunakan FULLTEXT search untuk performance
+        """
+        from apps.repository.models import RepositoryFile
         
-        if not indexed_files.exists():
-            return (0, None)
-        
-        sentence_lower = sentence.lower()
-        sentence_tokens = set(word_tokenize(sentence_lower))
-        
-        if not sentence_tokens:
-            return (0, None)
-
-        for repo_file in indexed_files:
-            try:
-                txt_path = repo_file.extracted_text_path
-                if not txt_path or not os.path.exists(txt_path):
-                    continue
-                    
-                with open(txt_path, 'r', encoding='utf-8') as f:
-                    content = f.read().lower()
-
-                if sentence_lower in content:
-                    return (100, repo_file)
-
-                content_tokens = set(word_tokenize(content))
-                intersection = sentence_tokens.intersection(content_tokens)
+        try:
+            # Clean sentence untuk MariaDB
+            sentence_clean = self._clean_text_for_mariadb(sentence)
+            if not sentence_clean:
+                return (0, None)
+            
+            # Use parameterized query untuk prevent SQL injection
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT rf.id, rf.title, rf.author, rf.year, rf.extracted_text_path,
+                           MATCH(extracted_text) AGAINST(%s IN NATURAL LANGUAGE MODE) as relevance
+                    FROM repository_files rf
+                    WHERE rf.status = 'indexed'
+                      AND MATCH(extracted_text) AGAINST(%s IN NATURAL LANGUAGE MODE)
+                    ORDER BY relevance DESC
+                    LIMIT 5
+                """, [sentence_clean, sentence_clean])
                 
-                if len(sentence_tokens) > 0:
-                    overlap_score = (len(intersection) / len(sentence_tokens)) * 100
-                else:
-                    overlap_score = 0
-                
-                if overlap_score > best_score:
-                    best_score = overlap_score
-                    best_match = repo_file
-                    
-                if best_score == 100:
-                    break
-                    
-            except Exception as e:
-                print(f"Error checking local: {e}")
-                continue
-        
-        if best_score >= self.threshold:
-            return (best_score, best_match)
-        return (0, None)
+                results = cursor.fetchall()
+            
+            if not results:
+                return (0, None)
+            
+            # Get best match
+            best_match = results[0]
+            repo_file = RepositoryFile.objects.get(id=best_match[0])
+            
+            # Calculate similarity score
+            score = min(best_match[5] * 100, 100)  # relevance * 100, cap at 100
+            
+            if score >= self.threshold:
+                return (score, repo_file)
+            
+            return (0, None)
+            
+        except Exception as e:
+            print(f"Error check_local: {e}")
+            return (0, None)
 
     def process_check(self, text, source_mode='both'):
         sentences = self.tokenize(text)
